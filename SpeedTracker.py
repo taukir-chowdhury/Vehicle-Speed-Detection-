@@ -8,6 +8,7 @@ from utils.general import (LOGGER, check_img_size, non_max_suppression, scale_co
                                   check_imshow, xyxy2xywh, increment_path)
 from utils.datasets import LoadImages
 import timeit
+import csv
 
 
 model = torch.hub.load("F:\Work\Personal\yolov5", "custom", 
@@ -25,12 +26,13 @@ deepsort = DeepSort(deep_sort_model,
                     max_age=cfg.DEEPSORT.MAX_AGE, n_init=cfg.DEEPSORT.N_INIT, nn_budget=cfg.DEEPSORT.NN_BUDGET,
                     use_cuda=True)
 
-output_video = "F:\Work\Personal\\test\demo5.avi"
+output_video = "F:\Work\Personal\\test\demo6.avi"
 video_path = "F:\Work\Personal\\test\\test_300feet.mp4"
 FRAME_COUNT = 0
 FPS = 12
 Entered_Polygon = {}
 Speed = {}
+data =[]
 
 # preprocessing
 
@@ -93,6 +95,16 @@ def calculate_speed(entry_time,exit_time):
     return round(speed,3)
 
 
+
+def create_report(frame,ID,speed,time, xmin, ymin, xmax, ymax):
+    cropped_image = frame[xmin:xmax,ymin:ymax]
+    name = f"{time*FPS}_{ID}"
+    cv2.imwrite(f"F:\Work\Personal\saved_images\\name.png", cropped_image)
+    data.append([name,time,speed])
+
+    
+
+
 def annotate(frame, obj_info,font=cv2.FONT_HERSHEY_SIMPLEX, box_width=1, font_size=1, 
             detected_color=(0, 255, 0), font_color=(255, 255, 255), font_thickness = 1):
 
@@ -125,6 +137,8 @@ def annotate(frame, obj_info,font=cv2.FONT_HERSHEY_SIMPLEX, box_width=1, font_si
             
             elif if_inside_polygon((cx, cy),dr1):
                 speed = Speed[ID]
+                time = FRAME_COUNT/FPS
+                create_report(frame,ID,speed,time,xmin, ymin, xmax, ymax)
                 del Speed[ID]
                 del Entered_Polygon[ID]
             else:
@@ -229,6 +243,17 @@ while True:
 
     else:
         break
+
+
+header = ['name', 'time', 'speed']
+with open('report.csv', 'w', encoding='UTF8', newline='') as f:
+    writer = csv.writer(f)
+
+    # write the header
+    writer.writerow(header)
+
+    # write multiple rows
+    writer.writerows(data)
 
 end = timeit.default_timer()
 print(f"For processing one {TOTAL_FRAMES/FPS}s video: Total Required Time: {end-start}s")
