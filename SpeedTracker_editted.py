@@ -11,10 +11,25 @@ import timeit
 import csv
 
 
+### Input and Output Path ###
+result_path = "F:\Work\Personal\\results"
+
+input_name = "test_300feet2"
+if not os.path.exists(os.path.join(result_path,input_name)):
+    os.makedirs(os.path.join(result_path,input_name))
+    os.makedirs(os.path.join(result_path,input_name,"saved_images"))
+    
+    
+output_name = 'demo_3min'
+output_video = f"{result_path}\\{input_name}\{output_name}.avi"
+video_path = f"F:\Work\Personal\\test\\{input_name}.mp4"
+FPS = 12
+
+
+### Model Loading ###
 model = torch.hub.load("F:\Work\Personal\yolov5", "custom", 
                         source="local", path="F:\Work\Personal\yolov5\\yolov5s.pt", force_reload=True)
 
-path = "test_image"
 deep_sort_model = "osnet_x0_25"
 config_deepsort = "deep_sort/configs/deep_sort.yaml"
 
@@ -26,16 +41,15 @@ deepsort = DeepSort(deep_sort_model,
                     max_age=cfg.DEEPSORT.MAX_AGE, n_init=cfg.DEEPSORT.N_INIT, nn_budget=cfg.DEEPSORT.NN_BUDGET,
                     use_cuda=True)
 
-output_video = "F:\Work\Personal\\test\demo_3min.avi"
-video_path = "F:\Work\Personal\\test\\test_300feet2.mp4"
-FRAME_COUNT = 0
-FPS = 12
+
+
+
 Entered_Polygon = {}
 Speed = {}
 data =[]
+FRAME_COUNT = 0
 
 # preprocessing
-
 x_numpy = 1914
 y_numpy = 1080
 
@@ -96,14 +110,25 @@ def calculate_speed(entry_time,exit_time):
 
 
 
-def create_report(frame,ID,speed,time, xmin, ymin, xmax, ymax):
+def adding_to_report(frame,ID,speed,time, xmin, ymin, xmax, ymax):
+    
+    #cropped = img[start_row:end_row, start_col:end_col]
     cropped_image = frame[ymin:ymax,xmin:xmax]
     name = f"{time*FPS}_{ID}"
-    cv2.imwrite(f"F:\Work\Personal\saved_images\\{name}.png", cropped_image)
+    cv2.imwrite(f"{os.path.join(result_path,input_name,'saved_images')}\{name}.png", cropped_image)
     data.append([name,time,speed])
 
     
+def create_report(data):
+    header = ['name', 'time(s)', 'speed(km/h)']
+    with open(f"{result_path}\\{input_name}\\report.csv", 'w', encoding='UTF8', newline='') as f:
+        writer = csv.writer(f)
 
+        # write the header
+        writer.writerow(header)
+
+        # write multiple rows
+        writer.writerows(data)
 
 def annotate(frame, obj_info,font=cv2.FONT_HERSHEY_SIMPLEX, box_width=1, font_size=1, 
             detected_color=(0, 255, 0), font_color=(255, 255, 255), font_thickness = 1):
@@ -138,7 +163,7 @@ def annotate(frame, obj_info,font=cv2.FONT_HERSHEY_SIMPLEX, box_width=1, font_si
             elif if_inside_polygon((cx, cy),dr1):
                 speed = Speed[ID]
                 time = FRAME_COUNT/FPS
-                create_report(frame,ID,speed,time,xmin, ymin, xmax, ymax)
+                adding_to_report(frame,ID,speed,time,xmin, ymin, xmax, ymax)
                 del Speed[ID]
                 del Entered_Polygon[ID]
             else:
@@ -245,15 +270,7 @@ while True:
         break
 
 
-header = ['name', 'time', 'speed']
-with open('report.csv', 'w', encoding='UTF8', newline='') as f:
-    writer = csv.writer(f)
-
-    # write the header
-    writer.writerow(header)
-
-    # write multiple rows
-    writer.writerows(data)
+create_report(data)
 
 end = timeit.default_timer()
 print(f"For processing one {TOTAL_FRAMES/FPS}s video: Total Required Time: {end-start}s")
