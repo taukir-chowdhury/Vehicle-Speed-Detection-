@@ -9,7 +9,7 @@ from utils.general import (LOGGER, check_img_size, non_max_suppression, scale_co
 from utils.datasets import LoadImages
 import timeit
 import csv
-
+from tqdm import tqdm
 
 ### Input and Output Path ###
 result_path = "F:\Work\Personal\\results"
@@ -20,7 +20,7 @@ if not os.path.exists(os.path.join(result_path,input_name)):
     os.makedirs(os.path.join(result_path,input_name,"saved_images"))
     
     
-output_name = 'demo_3min'
+output_name = 'test_300feet2_output_2'
 output_video = f"{result_path}\\{input_name}\{output_name}.avi"
 video_path = f"F:\Work\Personal\\test\\{input_name}.mp4"
 FPS = 12
@@ -47,16 +47,17 @@ deepsort = DeepSort(deep_sort_model,
 Entered_Polygon = {}
 Speed = {}
 data =[]
+log = []
 FRAME_COUNT = 0
 
 # preprocessing
 x_numpy = 1914
 y_numpy = 1080
 
-x_editor = 1600
-y_editor = 900
+x_editor = 1920
+y_editor = 1080
 
-LENGTH = 5 * .001 #km or 6 meter
+LENGTH = 16 * .001 #km or 16 meter
 
 x_factor = x_numpy/x_editor
 y_factor = y_numpy/y_editor
@@ -82,13 +83,13 @@ def process_coordinates(area):
 # roi = np.array([[16,1068],[6,780],[969,639],[1341,1059]])
 # roi_processed = np.matmul(roi,factors)
 
-area = [(480,250), (753,367), (676,462), (337, 313)]
+
+area = [(565,298), (1005,417), (861,633), (198,423)]
 dr1 = [(0,470), (520,750), (417,900), (0,700)]
-roi = [(10, 867), (390, 703), (1039,721), (1227,913)] 
 
 deleting_region1 = process_coordinates(dr1)
 area_processed = process_coordinates(area)
-roi_processed = process_coordinates(roi)
+
 
 def if_inside_polygon(center, polygonArea):
     # center = (cx, cy)
@@ -130,6 +131,11 @@ def create_report(data):
         # write multiple rows
         writer.writerows(data)
 
+def create_log(log):
+    with open("f'{result_path}\\{input_name}\{output_name}_log.txt'", "w") as f:
+        text = "".join(log)
+        f.write(text)
+
 def annotate(frame, obj_info,font=cv2.FONT_HERSHEY_SIMPLEX, box_width=1, font_size=1, 
             detected_color=(0, 255, 0), font_color=(255, 255, 255), font_thickness = 1):
 
@@ -146,28 +152,41 @@ def annotate(frame, obj_info,font=cv2.FONT_HERSHEY_SIMPLEX, box_width=1, font_si
         cy = int((ymin + ymax)/2)
         
         if Entered_Polygon.get(ID, -1) == -1 and not if_inside_polygon((cx, cy), area_processed):
+            log.append(f"ID: {ID} centered: ({cx},{cy}) in not inside polygon and haven't entered yet\n")
             pass
         
         elif Entered_Polygon.get(ID, -1) == -1 and if_inside_polygon((cx, cy), area_processed):
             entry_time = FRAME_COUNT/FPS
             Entered_Polygon[ID] = entry_time
+            log.append(f"ID: {ID} centered: ({cx},{cy}) inside polygon but not in Entered_polygon dict yet. Entry time: {entry_time}, frame count: {FRAME_COUNT}\n")
         
         elif Entered_Polygon.get(ID, -1) != -1 and not if_inside_polygon((cx, cy), area_processed):
+            log.append(f"ID: {ID} centered: ({cx},{cy}) inside polygon and in Entered_polygon\n")
             if Speed.get(ID,-1) == -1 :
                 exit_time = FRAME_COUNT/FPS
                 entry_time = Entered_Polygon.get(ID)
                 speed = calculate_speed(entry_time,exit_time)
                 
                 Speed[ID] = speed
-            
-            elif if_inside_polygon((cx, cy),dr1):
+                log.append(f"ID: {ID} centered: ({cx},{cy}) not in polygon but in Entered_polygon, so, calculating Speed. speed: {speed}, Entry Time: {entry_time}, Exit Time: {exit_time}, frame Count {FRAME_COUNT}\n")
+                log.append(f"ID: {ID} centered: ({cx},{cy}) frame: {FRAME_COUNT}, Speed_dict: {Speed}\n\n")
+                
+                
+            elif if_inside_polygon((cx, cy),deleting_region1):
                 speed = Speed[ID]
                 time = FRAME_COUNT/FPS
+                log.append(f"ID: {ID} centered: ({cx},{cy})  inside deleting region with speed: {speed}.\n")
+                log.append(f"Speed_dict before deleting inside deleting region: {Speed} \n\n")
+                log.append(f"EnteredPolygon_dict before deleting inside deleting region: {Entered_Polygon} \n\n")
                 adding_to_report(frame,ID,speed,time,xmin, ymin, xmax, ymax)
                 del Speed[ID]
                 del Entered_Polygon[ID]
+                log.append(f"EnteredPolygon_dict after deleting inside deleting region: {Entered_Polygon} \n\n")
+                log.append(f"Speed_dict After deleting inside deleting region: {Speed} \n\n")
             else:
+                
                 speed = Speed[ID]
+                log.append(f"ID: {ID} centered: ({cx},{cy}) frame: {FRAME_COUNT}, with speed: {speed}\n\n")
                 
             text = str(speed) + "km/h" 
             
@@ -180,6 +199,7 @@ def annotate(frame, obj_info,font=cv2.FONT_HERSHEY_SIMPLEX, box_width=1, font_si
             pos_y = max((ymin - 20),0)
             cv2.rectangle(frame, (pos_x, pos_y), (pos_x + text_w, pos_y + text_h), color = (124,252,0), thickness = -1)
             cv2.putText(frame, text, (pos_x, pos_y + text_h + font_size - 1), font, font_size, font_color, font_thickness)
+            log.append(f"ID: {ID} centered: ({cx},{cy}) inside puttext: frame: {FRAME_COUNT}, with speed: {text}\n\n")
     
     return frame
 
@@ -235,10 +255,13 @@ output_video = cv2.VideoWriter(output_video,
 
 frame_skip = 0
 start = timeit.default_timer()
+
+pbar = tqdm(total=TOTAL_FRAMES)
 while True:
     
     success, frame = video.read()
     if success:
+        pbar.update(1)
         result = model(frame)
         outputs = get_tracking_id(result,frame)
         
@@ -254,8 +277,6 @@ while True:
         
         
         FRAME_COUNT = FRAME_COUNT + 1
-        if FRAME_COUNT % FPS == 0:
-            print(f"Completed {FRAME_COUNT/FPS}s: {FRAME_COUNT}/{TOTAL_FRAMES}")
             
         # if frame_count == frame_skip:
         #     frame_count = 0
@@ -269,7 +290,10 @@ while True:
 
 
 create_report(data)
+create_log(log)
 
 end = timeit.default_timer()
 print(f"For processing one {TOTAL_FRAMES/FPS}s video: Total Required Time: {end-start}s")
 
+
+    

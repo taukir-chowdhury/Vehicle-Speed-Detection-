@@ -14,13 +14,13 @@ import csv
 ### Input and Output Path ###
 result_path = "F:\Work\Personal\\results"
 
-input_name = "test_300feet2"
+input_name = "demo18m"
 if not os.path.exists(os.path.join(result_path,input_name)):
     os.makedirs(os.path.join(result_path,input_name))
     os.makedirs(os.path.join(result_path,input_name,"saved_images"))
     
     
-output_name = 'demo_3min'
+output_name = 'demo18m_output'
 output_video = f"{result_path}\\{input_name}\{output_name}.avi"
 video_path = f"F:\Work\Personal\\test\\{input_name}.mp4"
 FPS = 12
@@ -53,10 +53,10 @@ FRAME_COUNT = 0
 x_numpy = 1914
 y_numpy = 1080
 
-x_editor = 1600
-y_editor = 900
+x_editor = 1920
+y_editor = 1080
 
-LENGTH = 5 * .001 #km or 6 meter
+LENGTH = 16 * .001 #km or 6 meter
 
 x_factor = x_numpy/x_editor
 y_factor = y_numpy/y_editor
@@ -82,13 +82,13 @@ def process_coordinates(area):
 # roi = np.array([[16,1068],[6,780],[969,639],[1341,1059]])
 # roi_processed = np.matmul(roi,factors)
 
-area = [(480,250), (753,367), (676,462), (337, 313)]
+
+area = [(571,291), (930,393), (805, 537),(349,367)]
 dr1 = [(0,470), (520,750), (417,900), (0,700)]
-roi = [(10, 867), (390, 703), (1039,721), (1227,913)] 
 
 deleting_region1 = process_coordinates(dr1)
 area_processed = process_coordinates(area)
-roi_processed = process_coordinates(roi)
+
 
 def if_inside_polygon(center, polygonArea):
     # center = (cx, cy)
@@ -160,7 +160,7 @@ def annotate(frame, obj_info,font=cv2.FONT_HERSHEY_SIMPLEX, box_width=1, font_si
                 
                 Speed[ID] = speed
             
-            elif if_inside_polygon((cx, cy),dr1):
+            elif if_inside_polygon((cx, cy),deleting_region1):
                 speed = Speed[ID]
                 time = FRAME_COUNT/FPS
                 adding_to_report(frame,ID,speed,time,xmin, ymin, xmax, ymax)
